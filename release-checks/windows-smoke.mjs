@@ -479,8 +479,8 @@ async function main() {
     const reader = await until(() => ev(`const v = electron.webContents.getAllWebContents().find(c => !c.isDestroyed() && c.getURL().startsWith("report://")); return v && !v.isLoading() && v.getTitle() ? {url: v.getURL().replace(/^report:\\/\\/[^/]+/, "report://<id>"), title: v.getTitle()} : null;`), 'the report to open in the viewer', 30000);
     assertion('opening the report loads its file into the viewer', reader.title === SCANNED.title, reader);
 
-    const windows = await ev('return electron.BrowserWindow.getAllWindows().map(w => ({url: w.webContents.getURL().replace(/^file:.*\\//, ""), visible: w.isVisible(), minimized: w.isMinimized()}));');
-    assertion('a main window and a Settings window exist and none is visible', windows.some(w => w.url === 'index.html') && windows.some(w => w.url === 'settings.html') && windows.every(w => !w.visible), windows);
+    const windows = await ev('const all = electron.BaseWindow.getAllWindows(); const main = electron.BrowserWindow.getAllWindows().find(w => w.webContents.getURL().endsWith("/index.html")); const settings = globalThis.__settingsHost.settingsWindow(); const describe = w => w && !w.isDestroyed() ? {id: w.id, url: w.webContents?.getURL() || null, visible: w.isVisible(), minimized: w.isMinimized()} : null; return {all: all.map(w => ({id: w.id, url: w.webContents?.getURL() || null, visible: w.isVisible(), minimized: w.isMinimized()})), main: describe(main), settings: describe(settings), mainInInventory: all.includes(main), settingsInInventory: all.includes(settings)};');
+    assertion('the main and Settings windows are alive in the full window inventory and none is visible', !!windows.main && windows.main.url?.endsWith('/index.html') && !!windows.settings && windows.settings.url?.endsWith('/settings.html') && windows.mainInInventory && windows.settingsInInventory && windows.all.every(w => !w.visible), windows);
 
     // Quit through the app, then insist it leaves on its own
     ev('setTimeout(() => electron.app.quit(), 0); return true;').catch(() => {});

@@ -1,7 +1,10 @@
 # Manual gate for the unsigned Windows build of ReportScout. Starts only when someone runs it by hand (workflow_dispatch):
 # no push, pull request, schedule or release trigger. It reads the binary-only DRAFT release named in the inputs, checks the
 # asset's SHA-256, then runs the packaged ReportScout.exe on a Windows runner with synthetic reports only.
-# Optional publish=true adds a second job that runs only after the Windows job succeeded: it copies the verified ZIP from the
+# Drafts are invisible to a read-only token, so a first job (prepare, Ubuntu) has the token permission needed to see the draft: it
+# downloads the one ZIP, checks its SHA-256 and hands it over as a one-day workflow artifact. It runs no downloaded code and
+# changes no release. The Windows job gets only contents: read, takes that artifact and checks the SHA-256 again.
+# Optional publish=true adds a further job that runs only after the Windows job succeeded: it copies the verified ZIP from the
 # draft to the existing public release v0.3.0 together with a new Windows checksum file. The Windows job keeps read-only access.
 name: Verify Windows release
 
@@ -34,7 +37,59 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Needs contents: write only because GitHub shows draft releases to tokens with push access. Reads one asset; never executes
+  # it, never edits or uploads to any release. No checkout.
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Fetch the draft ZIP and check its SHA-256
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RS_REPOSITORY: ${{ github.repository }}
+          RS_RELEASE_TAG: ${{ inputs.release_tag }}
+          RS_ASSET_NAME: ${{ inputs.asset_name }}
+          RS_SHA256: ${{ inputs.sha256 }}
+        run: |
+          set -euo pipefail
+          [ "$RS_REPOSITORY" = "techczech/report-scout" ] || { echo "Wrong repository" >&2; exit 1; }
+          [ "$RS_RELEASE_TAG" = "reportscout-windows-0.3.0-verification" ] || { echo "Unexpected draft tag" >&2; exit 1; }
+          [ "$RS_ASSET_NAME" = "ReportScout-0.3.0-win-x64.zip" ] || { echo "Unexpected asset name" >&2; exit 1; }
+          [[ "$RS_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "SHA-256 must be 64 lowercase hex characters" >&2; exit 1; }
+
+          draft_ids=$(gh api --paginate "repos/$RS_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.draft == true and .tag_name == \"$RS_RELEASE_TAG\") | .id")
+          [ "$(printf '%s\n' "$draft_ids" | grep -c .)" = "1" ] || { echo "Expected exactly one draft with that tag" >&2; exit 1; }
+          asset_ids=$(gh api "repos/$RS_REPOSITORY/releases/$draft_ids" \
+            --jq ".assets[] | select(.name == \"$RS_ASSET_NAME\" and .state == \"uploaded\") | .id")
+          [ "$(printf '%s\n' "$asset_ids" | grep -c .)" = "1" ] || { echo "Expected exactly one uploaded asset with that name" >&2; exit 1; }
+
+          # Job-owned directory; it holds only the ZIP, which is what the artifact step uploads.
+          mkdir "$RUNNER_TEMP/rs-prepare"
+          gh api -H "Accept: application/octet-stream" "repos/$RS_REPOSITORY/releases/assets/$asset_ids" > "$RUNNER_TEMP/rs-prepare/$RS_ASSET_NAME"
+          actual=$(sha256sum "$RUNNER_TEMP/rs-prepare/$RS_ASSET_NAME" | cut -d' ' -f1)
+          [ "$actual" = "$RS_SHA256" ] || { echo "SHA-256 mismatch: downloaded $actual" >&2; exit 1; }
+          echo "SHA-256 matches the expected value."
+
+      # The artifact holds exactly this one file and expires after a day.
+      - name: Hand the ZIP to the Windows job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reportscout-windows-zip
+          path: ${{ runner.temp }}/rs-prepare/ReportScout-0.3.0-win-x64.zip
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Remove the downloaded copy
+        if: ${{ always() }}
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/rs-prepare"
+
   verify:
+    needs: prepare
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
@@ -45,18 +100,34 @@ jobs:
           sparse-checkout: release-checks
           persist-credentials: false
 
+      - name: Fetch the ZIP prepared by the first job
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: reportscout-windows-zip
+          path: ${{ github.workspace }}/rs-input
+
+      # The smoke script checks the SHA-256 again before it extracts anything.
+      - name: Point the smoke check at the local ZIP
+        shell: bash
+        env:
+          RS_ASSET_NAME: ${{ inputs.asset_name }}
+        run: |
+          set -euo pipefail
+          [ "$RS_ASSET_NAME" = "ReportScout-0.3.0-win-x64.zip" ] || { echo "Unexpected asset name" >&2; exit 1; }
+          [ -f "$GITHUB_WORKSPACE/rs-input/$RS_ASSET_NAME" ] || { echo "Prepared ZIP is missing" >&2; exit 1; }
+          echo "RS_LOCAL_ZIP=$(cygpath -w "$GITHUB_WORKSPACE/rs-input/$RS_ASSET_NAME")" >> "$GITHUB_ENV"
+
       # The inputs reach the script only as environment variables, never inside the script text.
       - name: Run the Windows smoke check
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ github.token }}
           RS_RELEASE_TAG: ${{ inputs.release_tag }}
           RS_ASSET_NAME: ${{ inputs.asset_name }}
           RS_SHA256: ${{ inputs.sha256 }}
           RS_EXPECTED_VERSION: "0.3.0"
         run: node release-checks/windows-smoke.mjs
 
-  # Runs only when the Windows job succeeded and publish was ticked. The only job with a write token. It downloads nothing but
+  # Runs only when the Windows job succeeded and publish was ticked. Its separate write token is used only for publication. It downloads nothing but
   # the ZIP, runs no downloaded code, and is fixed to one repository, one draft, one asset and one public release.
   publish:
     needs: verify

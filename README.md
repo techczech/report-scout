@@ -1,4 +1,4 @@
-A local HTML report library for Mac · Version 0.3.0
+A local HTML report library for Mac and Windows · Version 0.3.0
 
 # ReportScout
 
@@ -9,10 +9,12 @@ Browse and search the HTML reports and visualisations your agents create. Keep t
 
 [Download for Mac](https://github.com/techczech/report-scout/releases/download/v0.3.0/ReportScout-0.3.0-mac-arm64.zip)
 
+[Download for Windows](https://github.com/techczech/report-scout/releases/download/v0.3.0/ReportScout-0.3.0-win-x64.zip)
+
 [See how to get started ↓](https://techczech.github.io/report-scout/#get-started)
 
-macOS 12 or later · Apple silicon (arm64)
-Developer ID signed and notarised.
+macOS 12 or later on Apple silicon · Windows 10 or later (x64)
+Mac download Developer ID signed and notarised. Windows download unsigned.
 
 ![ReportScout showing two sample Health reports in a list, with the Ward staffing report open in the reader beside them.](https://techczech.github.io/report-scout/assets/reportscout-sample-reader.png)
 
@@ -60,10 +62,10 @@ ReportScout does not assign topics automatically on import. The app has no built
 
 From download to first report
 
-## Get started on your Mac
+## Get started on your computer
 
 ### Install ReportScout
-Download the ZIP, unzip it, move ReportScout to Applications and open it.
+On Mac, unzip the Mac download, move ReportScout to Applications and open it. On Windows, unzip the Windows download, keep the extracted folder together and run **ReportScout.exe**.
 
 ### Choose your report folders
 A new library starts empty. Click **Choose report folders**, or open **Settings → Report folders**, and pick a folder containing HTML reports.
@@ -75,11 +77,11 @@ New installs keep the inbox, configuration and index in the app’s local data f
 
 ## A few practical questions
 
-### What stays on my Mac?
+### What stays on my computer?
 Your catalogue, search index, stars, categories, topic choices and report links are stored locally. ReportScout has no report-upload service and comes with no personal report collection. Reports can load approved external chart or font resources, so some reports need a network connection. If you ask an external agent for topic suggestions, its access to your reports depends on the agent you choose.
 
-### Which Macs can run it?
-This download supports macOS 12 or later on Apple silicon (arm64). Developer ID signed and notarised.
+### Which computers can run it?
+The Mac download supports macOS 12 or later on Apple silicon (arm64). The Windows download supports Windows 10 or later on x64 computers. Mac download Developer ID signed and notarised. Windows download unsigned.
 
 ### Does it move my project reports?
 Reports found in your chosen project folders stay there. Registered reports and reports captured into the app’s inbox are also included in the catalogue.
@@ -88,8 +90,10 @@ Reports found in your chosen project folders stay there. Registered reports and 
 No. ReportScout reads HTML reports. It does not index linked Markdown files, PDFs or the contents of web pages.
 
 ## Bring your HTML reports together
-ReportScout 0.3.0 · macOS 12 or later · Apple silicon (arm64)
+ReportScout 0.3.0 · macOS 12 or later on Apple silicon · Windows 10 or later (x64)
 
 [Download for Mac](https://github.com/techczech/report-scout/releases/download/v0.3.0/ReportScout-0.3.0-mac-arm64.zip)
+
+[Download for Windows](https://github.com/techczech/report-scout/releases/download/v0.3.0/ReportScout-0.3.0-win-x64.zip)
 
 [Release notes](https://github.com/techczech/report-scout/releases/tag/v0.3.0)

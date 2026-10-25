@@ -482,8 +482,9 @@ async function main() {
     const windows = await ev('const all = electron.BaseWindow.getAllWindows(); const main = electron.BrowserWindow.getAllWindows().find(w => w.webContents.getURL().endsWith("/index.html")); const settings = globalThis.__settingsHost.settingsWindow(); const describe = w => w && !w.isDestroyed() ? {id: w.id, url: w.webContents?.getURL() || null, visible: w.isVisible(), minimized: w.isMinimized()} : null; return {all: all.map(w => ({id: w.id, url: w.webContents?.getURL() || null, visible: w.isVisible(), minimized: w.isMinimized()})), main: describe(main), settings: describe(settings), mainInInventory: all.includes(main), settingsInInventory: all.includes(settings)};');
     assertion('the main and Settings windows are alive in the full window inventory and none is visible', !!windows.main && windows.main.url?.endsWith('/index.html') && !!windows.settings && windows.settings.url?.endsWith('/settings.html') && windows.mainInInventory && windows.settingsInInventory && windows.all.every(w => !w.visible), windows);
 
-    // Quit through the app, then insist it leaves on its own
-    ev('setTimeout(() => electron.app.quit(), 0); return true;').catch(() => {});
+    // Let Electron evaluate app.quit before detaching this verifier's inspector.
+    await ev('setTimeout(() => electron.app.quit(), 100); return true;');
+    ins.close(); ins = undefined;
     await until(() => exited.done, 'the app to quit by itself', 20000).catch(() => {});
     guiRecord.exit = exited.code; guiRecord.signal = exited.signal; guiRecord.stderrTail = redact(tail.err).slice(-1500);
     report.commands.push(guiRecord);

@@ -237,6 +237,82 @@ const CAPTURE = {title: 'Příběh půdního průzkumu', body: 'žluťoučký-k�
 const SCANNED = {title: 'Kvartální přehled zálivky', body: 'úrodný-déšť-9038'};
 const html = (title, body) => `<!doctype html>\n<html lang="cs"><head><meta charset="utf-8"><title>${title}</title></head><body><h1>${title}</h1><p>${body}</p></body></html>\n`;
 
+// ---------- settings-write diagnostic (records only; it never passes or fails the check) ----------
+
+// Run by ReportScout.exe as Node. "full" repeats each step of the settings package's write in a fresh folder, then runs the
+// packaged SettingsFile in a second fresh folder with its documented test hooks, which only observe: openDir opens the folder
+// exactly as the package does and notes how the handle's fsync ends. "inspect" lists an existing folder and fsyncs it, nothing more.
+const SETTINGS_PROBE = String.raw`
+import fs from 'node:fs'; import fsp from 'node:fs/promises'; import path from 'node:path'; import {pathToFileURL} from 'node:url';
+const [mode, dir, expect, asar] = process.argv.slice(2);
+const C = fs.constants, out = {mode, platform: process.platform, electron: process.versions.electron, oNoFollow: C.O_NOFOLLOW ?? null, steps: []};
+const err = e => ({code: e?.code, errno: e?.errno, syscall: e?.syscall, message: String(e?.message ?? e).split(dir).join('<dir>').slice(0, 300)});
+const plain = v => v === undefined || v === null || typeof v !== 'object' || Array.isArray(v) || Object.getPrototypeOf(v) === Object.prototype;
+const step = async (name, fn) => { try { const v = await fn(); out.steps.push({name, ok: true, ...(v !== undefined && plain(v) ? {v} : {})}); return v; } catch (e) { out.steps.push({name, ok: false, error: err(e)}); return undefined; } };
+const id = s => ({dev: String(s.dev), ino: String(s.ino)});
+const writeTemp = async (name, text) => {
+  const fh = await step(name + ' open (O_WRONLY|O_CREAT|O_EXCL)', () => fsp.open(path.join(dir, name), C.O_WRONLY | C.O_CREAT | C.O_EXCL | (C.O_NOFOLLOW ?? 0), 384));
+  if (!fh) return undefined;
+  await step(name + ' write', () => fh.writeFile(text, 'utf8')); await step(name + ' fsync', () => fh.sync());
+  const st = await step(name + ' fstat', async () => id(await fh.stat())); await step(name + ' close', () => fh.close()); return st;
+};
+const dirSync = async (d, tag) => { const fh = await step(tag + ': open folder read-only', () => fsp.open(d, C.O_RDONLY)); if (!fh) return; await step(tag + ': fsync folder handle', () => fh.sync()); await step(tag + ': close folder handle', () => fh.close()); };
+try {
+  if (mode === 'inspect') {
+    await step('folder entries', async () => (await fsp.readdir(dir)).filter(n => /settings|tmp|lock|damaged/i.test(n)).slice(0, 40));
+    await step('settings.json', async () => { const t = await fsp.readFile(path.join(dir, 'settings.json'), 'utf8'); return {bytes: t.length, containsSavedFolder: !!expect && t.includes(JSON.stringify(expect).slice(1, -1))}; });
+    await dirSync(dir, 'data folder');
+  } else {
+    const target = path.join(dir, 'settings.json');
+    await step('mkdir', () => fsp.mkdir(dir, {recursive: true, mode: 448}));
+    await step('realpath equals folder', async () => (await fsp.realpath(dir)) === dir);
+    await writeTemp('lock-tmp', '{}');
+    await step('lock: hard link', () => fsp.link(path.join(dir, 'lock-tmp'), target + '.lock'));
+    await step('lock: unlink temp', () => fsp.unlink(path.join(dir, 'lock-tmp')));
+    await step('lock: rename aside', () => fsp.rename(target + '.lock', target + '.aside'));
+    await step('lock: unlink aside', () => fsp.unlink(target + '.aside'));
+    const a = await writeTemp('t1', '{"n":1}\n');
+    await step('rename onto a new file', () => fsp.rename(path.join(dir, 't1'), target));
+    await step('lstat matches the written handle (new)', async () => ({same: !!a && JSON.stringify(id(await fsp.lstat(target))) === JSON.stringify(a)}));
+    const b = await writeTemp('t2', '{"n":2}\n');
+    await step('rename over the existing file', () => fsp.rename(path.join(dir, 't2'), target));
+    await step('lstat matches the written handle (replace)', async () => ({same: !!b && JSON.stringify(id(await fsp.lstat(target))) === JSON.stringify(b)}));
+    let watcher;
+    await step('fs.watch on the folder', () => { watcher = fs.watch(dir, () => {}); watcher.on('error', () => {}); });
+    await writeTemp('t3', '{"n":3}\n');
+    await step('rename over the existing file while watched', () => fsp.rename(path.join(dir, 't3'), target));
+    await dirSync(dir, 'raw');
+    watcher?.close();
+    await step('read back', async () => (await fsp.readFile(target, 'utf8')) === '{"n":3}\n');
+    // The packaged package, observed through its own hooks, in a sibling folder that exists as the app's data folder does
+    const vdir = dir + ' package', events = [], ev = (e, x) => events.push(x ? {e, ...x} : {e});
+    const url = pathToFileURL(path.join(asar, 'node_modules', '@app-patterns', 'settings', 'dist', 'node', 'index.js')).href;
+    const mod = await step('import the packaged settings package', async () => (await import(url)).SettingsFile ? 'SettingsFile found' : 'SettingsFile missing');
+    if (mod === 'SettingsFile found') {
+      const {SettingsFile} = await import(url);
+      await step('mkdir package folder', () => fsp.mkdir(vdir, {recursive: true, mode: 448}));
+      const file = new SettingsFile(path.join(vdir, 'settings.json'), {testHooks: {
+        beforeCommit: () => ev('temp written and fsynced'), beforeRename: () => ev('about to rename'),
+        openDir: async d => { ev('renamed and checked; opening folder'); let fh; try { fh = await fsp.open(d, C.O_RDONLY); } catch (e) { ev('folder open threw', err(e)); throw e; }
+          const sync = fh.sync.bind(fh); fh.sync = async () => { try { await sync(); ev('folder fsync ok'); } catch (e) { ev('folder fsync threw', err(e)); throw e; } }; return fh; }}});
+      for (const n of [1, 2]) await step('SettingsFile.update #' + n, async () => { const r = await file.update(read => ({write: {probe: n}, result: read.kind})); return {ok: r.ok, code: r.code, error: r.error, result: r.result, written: r.written, events: events.splice(0)}; });
+      await step('package folder entries', async () => (await fsp.readdir(vdir)).slice(0, 20));
+    }
+  }
+} catch (e) { out.fatal = err(e); }
+process.stdout.write(JSON.stringify(out), () => process.exit(0));
+`;
+
+async function settingsWriteProbe(label, exe, asar, env, cwd, toolsDir, args) {
+  try {
+    const probe = path.join(toolsDir, 'settings-write-probe.mjs');
+    if (!fs.existsSync(probe)) fs.writeFileSync(probe, SETTINGS_PROBE);
+    const r = await run(`settings-write diagnostic: ${label}`, exe, [probe, ...args, asar], {env, cwd, timeoutMs: 90000, show: ['<settings-write-probe.mjs>', args[0], '<folder>']});
+    let parsed; try { parsed = JSON.parse(r.stdout); } catch { parsed = {unparsed: r.stdout.slice(0, 2000)}; }
+    (report.diagnostics ??= {})[label] = JSON.parse(redact(JSON.stringify({exit: r.exit, timedOut: r.timedOut, stderr: r.stderr.slice(0, 1500), ...parsed}).split(JSON.stringify(scratch).slice(1, -1)).join('<scratch>')));
+  } catch (e) { (report.diagnostics ??= {})[label] = {error: redact(e.message)}; }
+}
+
 // ---------- the gate ----------
 
 async function main() {
@@ -337,6 +413,9 @@ async function main() {
   const marks = JSON.parse(fs.readFileSync(path.join(inbox, 'report-marks.json'), 'utf8'));
   assertion('the star is stored in the data folder inbox', marks.reports?.some(r => r.starred === true), {entries: marks.reports?.length});
 
+  // Diagnostic only: how each step of a settings write ends on this machine, from the app's own runtime, in a fresh scratch folder
+  await settingsWriteProbe('before the window', exe, asar, cliEnv, dirs.work, dirs.tools, ['full', path.join(scratch, 'Nastavení sonda č. 1'), '']);
+
   // 6. The window, hidden: --report-scout-data is the only data-folder switch the app reads (it ignores --data-dir)
   fs.writeFileSync(path.join(dirs.reports, 'Čtvrtletní přehled.html'), html(SCANNED.title, SCANNED.body));
   const guiEnv = appEnv(dirs.home);
@@ -388,6 +467,7 @@ async function main() {
     assertion(`a native Windows folder (${/^[A-Za-z]:\\/.test(dirs.reports) ? 'drive-letter' : 'absolute'} path with spaces and Czech letters) is accepted by the Settings page`, queued.alerts.length === 0 && queued.items.length === 1 && comparable(queued.items[0]) === comparable(dirs.reports) && queued.saveEnabled, queued);
     await until(() => press('Save and refresh'), 'Save and refresh', 10000);
     const saved = await until(async () => { const s = await folderState(); return (/^Saved/.test(s.status) || s.alerts.length) && s; }, 'the save to finish', 20000);
+    if (!(/^Saved/.test(saved.status) && saved.alerts.length === 0)) await settingsWriteProbe('after the failed save', exe, asar, cliEnv, dirs.work, dirs.tools, ['inspect', dirs.data, dirs.reports]);
     assertion('Save and refresh saved the folder through the settings bridge', /^Saved/.test(saved.status) && saved.alerts.length === 0, saved);
 
     // The setting started a scan: the report in that folder is listed, searchable and opens in the viewer

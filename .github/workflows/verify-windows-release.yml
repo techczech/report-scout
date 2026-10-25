@@ -1,6 +1,8 @@
 # Manual gate for the unsigned Windows build of ReportScout. Starts only when someone runs it by hand (workflow_dispatch):
 # no push, pull request, schedule or release trigger. It reads the binary-only DRAFT release named in the inputs, checks the
 # asset's SHA-256, then runs the packaged ReportScout.exe on a Windows runner with synthetic reports only.
+# Optional publish=true adds a second job that runs only after the Windows job succeeded: it copies the verified ZIP from the
+# draft to the existing public release v0.3.0 together with a new Windows checksum file. The Windows job keeps read-only access.
 name: Verify Windows release
 
 on:
@@ -18,6 +20,11 @@ on:
         description: Expected SHA-256 of the ZIP (64 hex characters)
         required: true
         type: string
+      publish:
+        description: After the Windows check passes, attach the ZIP and a new checksum file to the public v0.3.0 release
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -48,3 +55,53 @@ jobs:
           RS_SHA256: ${{ inputs.sha256 }}
           RS_EXPECTED_VERSION: "0.3.0"
         run: node release-checks/windows-smoke.mjs
+
+  # Runs only when the Windows job succeeded and publish was ticked. The only job with a write token. It downloads nothing but
+  # the ZIP, runs no downloaded code, and is fixed to one repository, one draft, one asset and one public release.
+  publish:
+    needs: verify
+    if: ${{ inputs.publish == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Attach the verified ZIP and its checksum to the public release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RS_REPOSITORY: ${{ github.repository }}
+          RS_RELEASE_TAG: ${{ inputs.release_tag }}
+          RS_ASSET_NAME: ${{ inputs.asset_name }}
+          RS_SHA256: ${{ inputs.sha256 }}
+          RS_PUBLIC_TAG: v0.3.0
+        run: |
+          set -euo pipefail
+          [ "$RS_REPOSITORY" = "techczech/report-scout" ] || { echo "Wrong repository" >&2; exit 1; }
+          [ "$RS_RELEASE_TAG" = "reportscout-windows-0.3.0-verification" ] || { echo "Unexpected draft tag" >&2; exit 1; }
+          [ "$RS_ASSET_NAME" = "ReportScout-0.3.0-win-x64.zip" ] || { echo "Unexpected asset name" >&2; exit 1; }
+          [[ "$RS_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "SHA-256 must be 64 lowercase hex characters" >&2; exit 1; }
+          SUMS_NAME="ReportScout-0.3.0-win-x64-SHA256SUMS.txt"
+
+          # Drafts are not found by tag, so the draft is located through the release list, exactly as the Windows check does.
+          draft_ids=$(gh api --paginate "repos/$RS_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.draft == true and .tag_name == \"$RS_RELEASE_TAG\") | .id")
+          [ "$(printf '%s\n' "$draft_ids" | grep -c .)" = "1" ] || { echo "Expected exactly one draft with that tag" >&2; exit 1; }
+          asset_ids=$(gh api "repos/$RS_REPOSITORY/releases/$draft_ids" \
+            --jq ".assets[] | select(.name == \"$RS_ASSET_NAME\" and .state == \"uploaded\") | .id")
+          [ "$(printf '%s\n' "$asset_ids" | grep -c .)" = "1" ] || { echo "Expected exactly one uploaded asset with that name" >&2; exit 1; }
+
+          work="$(mktemp -d "$RUNNER_TEMP/rs-publish.XXXXXX")"
+          gh api -H "Accept: application/octet-stream" "repos/$RS_REPOSITORY/releases/assets/$asset_ids" > "$work/$RS_ASSET_NAME"
+          actual=$(sha256sum "$work/$RS_ASSET_NAME" | cut -d' ' -f1)
+          [ "$actual" = "$RS_SHA256" ] || { echo "SHA-256 mismatch: downloaded $actual" >&2; exit 1; }
+          echo "SHA-256 matches the expected value."
+
+          # Nothing is written to the public release until the checksum above has matched.
+          public=$(gh api "repos/$RS_REPOSITORY/releases/tags/$RS_PUBLIC_TAG" --jq '[.draft, (.assets | map(.name) | index("'"$RS_ASSET_NAME"'") // "none"), (.assets | map(.name) | index("'"$SUMS_NAME"'") // "none")] | @tsv')
+          [ "$public" = "false	none	none" ] || { echo "Public $RS_PUBLIC_TAG is not a published release free of these asset names" >&2; exit 1; }
+          printf '%s  %s\n' "$RS_SHA256" "$RS_ASSET_NAME" > "$work/$SUMS_NAME"
+          # No --clobber: an existing file with either name makes the upload fail instead of being replaced.
+          gh release upload "$RS_PUBLIC_TAG" "$work/$RS_ASSET_NAME" "$work/$SUMS_NAME" --repo "$RS_REPOSITORY"
+          echo "Uploaded $RS_ASSET_NAME and $SUMS_NAME to $RS_PUBLIC_TAG."

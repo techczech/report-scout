@@ -1,4 +1,4 @@
-A local HTML report library for Mac and Windows · Mac version 0.3.4, Windows version 0.3.3
+A local HTML report library for Mac and Windows · Mac version 0.3.4, Windows version 0.3.4
 
 ![ReportScout icon: report sheets under a magnifying glass.](https://techczech.github.io/report-scout/assets/reportscout-icon-512.png)
 
@@ -11,7 +11,7 @@ Browse and search the HTML reports and visualisations your agents create. Keep t
 
 [Download for Mac](https://github.com/techczech/report-scout/releases/download/v0.3.4/ReportScout-0.3.4-mac-arm64.zip)
 
-[Download for Windows](https://github.com/techczech/report-scout/releases/download/v0.3.3/ReportScout-0.3.3-win-x64.zip)
+[Download for Windows](https://github.com/techczech/report-scout/releases/download/v0.3.4/ReportScout-0.3.4-win-x64.zip)
 
 [See how to get started ↓](https://techczech.github.io/report-scout/#get-started)
 
@@ -97,10 +97,10 @@ Reports found in your chosen project folders stay there. Registered reports and 
 No. ReportScout reads HTML reports. It does not index linked Markdown files, PDFs or the contents of web pages.
 
 ## Bring your HTML reports together
-Mac 0.3.4, Windows 0.3.3 · macOS 12 or later on Apple silicon · Windows 10 or later (x64)
+Mac 0.3.4, Windows 0.3.4 · macOS 12 or later on Apple silicon · Windows 10 or later (x64)
 
 [Download for Mac](https://github.com/techczech/report-scout/releases/download/v0.3.4/ReportScout-0.3.4-mac-arm64.zip)
 
-[Download for Windows](https://github.com/techczech/report-scout/releases/download/v0.3.3/ReportScout-0.3.3-win-x64.zip)
+[Download for Windows](https://github.com/techczech/report-scout/releases/download/v0.3.4/ReportScout-0.3.4-win-x64.zip)
 
 [Release notes](https://github.com/techczech/report-scout/releases/tag/v0.3.4)

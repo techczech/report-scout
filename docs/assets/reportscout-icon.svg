@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="ReportScout: report sheets with a magnifying glass">
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#1e6b59"/>
+  <!-- back sheet -->
+  <rect x="250" y="210" width="350" height="480" rx="40" fill="#cfc6ac" transform="rotate(-9 425 450)"/>
+  <!-- front sheet -->
+  <rect x="270" y="210" width="350" height="480" rx="40" fill="#fbf7ea"/>
+  <rect x="320" y="266" width="170" height="34" rx="17" fill="#1e6b59"/>
+  <rect x="320" y="326" width="250" height="22" rx="11" fill="#9fb9b0"/>
+  <rect x="320" y="368" width="210" height="22" rx="11" fill="#9fb9b0"/>
+  <rect x="320" y="520" width="52" height="110" rx="10" fill="#1e6b59"/>
+  <rect x="390" y="470" width="52" height="160" rx="10" fill="#154f42"/>
+  <!-- magnifying glass: ivory halo for contrast on the teal tile, then dark teal ring and handle -->
+  <g stroke-linecap="round" fill="none">
+    <line x1="715" y1="715" x2="800" y2="800" stroke="#fbf7ea" stroke-width="112"/>
+    <circle cx="610" cy="610" r="140" stroke="#fbf7ea" stroke-width="112"/>
+    <line x1="715" y1="715" x2="800" y2="800" stroke="#154f42" stroke-width="66"/>
+  </g>
+  <circle cx="610" cy="610" r="140" fill="#dcefe7" stroke="#154f42" stroke-width="58"/>
+  <rect x="548" y="610" width="40" height="64" rx="8" fill="#1e6b59"/>
+  <rect x="604" y="560" width="40" height="114" rx="8" fill="#154f42"/>
+  <rect x="660" y="590" width="40" height="84" rx="8" fill="#1e6b59" opacity="0.55"/>
+</svg>

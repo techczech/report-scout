@@ -1,4 +1,4 @@
-A local HTML report library for Mac and Windows · Mac version 0.3.3, Windows version 0.3.3
+A local HTML report library for Mac and Windows · Mac version 0.3.4, Windows version 0.3.3
 
 ![ReportScout icon: report sheets under a magnifying glass.](https://techczech.github.io/report-scout/assets/reportscout-icon-512.png)
 
@@ -9,7 +9,7 @@ Read them in one place.
 
 Browse and search the HTML reports and visualisations your agents create. Keep the files in their project folders, with a gallery and reader to find them again.
 
-[Download for Mac](https://github.com/techczech/report-scout/releases/download/v0.3.3/ReportScout-0.3.3-mac-arm64.zip)
+[Download for Mac](https://github.com/techczech/report-scout/releases/download/v0.3.4/ReportScout-0.3.4-mac-arm64.zip)
 
 [Download for Windows](https://github.com/techczech/report-scout/releases/download/v0.3.3/ReportScout-0.3.3-win-x64.zip)
 
@@ -30,7 +30,7 @@ Choose folders containing HTML reports. ReportScout scans those folders and thei
 
 Use thumbnail previews in the gallery, or a list with the reader beside your results. Refine by project, date, category or star, and link related reports.
 
-Move a report you no longer need to the **Archive**. It leaves ordinary lists, searches and counts but is never deleted or moved, and keeps its star, categories, topics and links. Open the Archive from the foot of the browse panel to search it or restore a report.
+Move a report you no longer need to the **Archive**. It leaves ordinary lists, searches and counts but is never deleted or moved, and keeps its star, categories, topics and links. Tick several reports in the list or gallery and choose **Archive selected**, or use the Archive icon beside a report’s star on hover or keyboard focus. Open the Archive from the foot of the browse panel to search it or restore reports with the same controls.
 
 Keyboard shortcuts and the command palette make actions easy to find. Settings open in their own window.
 
@@ -97,10 +97,10 @@ Reports found in your chosen project folders stay there. Registered reports and 
 No. ReportScout reads HTML reports. It does not index linked Markdown files, PDFs or the contents of web pages.
 
 ## Bring your HTML reports together
-Mac 0.3.3, Windows 0.3.3 · macOS 12 or later on Apple silicon · Windows 10 or later (x64)
+Mac 0.3.4, Windows 0.3.3 · macOS 12 or later on Apple silicon · Windows 10 or later (x64)
 
-[Download for Mac](https://github.com/techczech/report-scout/releases/download/v0.3.3/ReportScout-0.3.3-mac-arm64.zip)
+[Download for Mac](https://github.com/techczech/report-scout/releases/download/v0.3.4/ReportScout-0.3.4-mac-arm64.zip)
 
 [Download for Windows](https://github.com/techczech/report-scout/releases/download/v0.3.3/ReportScout-0.3.3-win-x64.zip)
 
-[Release notes](https://github.com/techczech/report-scout/releases/tag/v0.3.3)
+[Release notes](https://github.com/techczech/report-scout/releases/tag/v0.3.4)

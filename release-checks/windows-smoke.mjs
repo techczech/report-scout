@@ -418,9 +418,9 @@ async function main() {
   for (const [n, title] of [[2, 'Batch second report'], [3, 'Batch untouched report']]) {
     const source = path.join(dirs.source, `batch-${n}.html`);
     fs.writeFileSync(source, html(title, `Synthetic batch body ${n}`));
-    const added = await c(`capture batch fixture ${n}`, ['add', source, '--title', title, '--by', 'windows-smoke']);
+    const added = await c(`capture batch fixture ${n}`, ['add', source, '--title', title, '--project', CAPTURE.project, '--by', 'windows-smoke']);
     const target = added.stdout.trim().split('\t')[0];
-    assertion(`batch fixture ${n} captured`, added.exit === 0 && fs.existsSync(target));
+    assertion(`batch fixture ${n} captured`, added.exit === 0 && fs.existsSync(target), {exit:added.exit, stderr:added.stderr.slice(0,300)});
     batchFiles.push(target);
   }
   const batchBytes = batchFiles.map(f => fs.readFileSync(f));

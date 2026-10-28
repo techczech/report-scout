@@ -5,7 +5,7 @@
 # downloads the one ZIP, checks its SHA-256 and hands it over as a one-day workflow artifact. It runs no downloaded code and
 # changes no release. The Windows job gets only contents: read, takes that artifact and checks the SHA-256 again.
 # Optional publish=true adds a further job that runs only after the Windows job succeeded: it copies the verified ZIP from the
-# draft to the existing public release v0.3.0 together with a new Windows checksum file. The Windows job keeps read-only access.
+# draft to the existing public release v0.3.3 together with a new Windows checksum file. The Windows job keeps read-only access.
 name: Verify Windows release
 
 on:
@@ -24,7 +24,7 @@ on:
         required: true
         type: string
       publish:
-        description: After the Windows check passes, attach the ZIP and a new checksum file to the public v0.3.0 release
+        description: After the Windows check passes, attach the ZIP and a new checksum file to the public v0.3.3 release
         required: false
         default: false
         type: boolean
@@ -56,8 +56,8 @@ jobs:
         run: |
           set -euo pipefail
           [ "$RS_REPOSITORY" = "techczech/report-scout" ] || { echo "Wrong repository" >&2; exit 1; }
-          [ "$RS_RELEASE_TAG" = "reportscout-windows-0.3.0-verification" ] || { echo "Unexpected draft tag" >&2; exit 1; }
-          [ "$RS_ASSET_NAME" = "ReportScout-0.3.0-win-x64.zip" ] || { echo "Unexpected asset name" >&2; exit 1; }
+          [ "$RS_RELEASE_TAG" = "reportscout-windows-0.3.3-verification" ] || { echo "Unexpected draft tag" >&2; exit 1; }
+          [ "$RS_ASSET_NAME" = "ReportScout-0.3.3-win-x64.zip" ] || { echo "Unexpected asset name" >&2; exit 1; }
           [[ "$RS_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "SHA-256 must be 64 lowercase hex characters" >&2; exit 1; }
 
           draft_ids=$(gh api --paginate "repos/$RS_REPOSITORY/releases?per_page=100" \
@@ -79,7 +79,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reportscout-windows-zip
-          path: ${{ runner.temp }}/rs-prepare/ReportScout-0.3.0-win-x64.zip
+          path: ${{ runner.temp }}/rs-prepare/ReportScout-0.3.3-win-x64.zip
           if-no-files-found: error
           retention-days: 1
 
@@ -113,7 +113,7 @@ jobs:
           RS_ASSET_NAME: ${{ inputs.asset_name }}
         run: |
           set -euo pipefail
-          [ "$RS_ASSET_NAME" = "ReportScout-0.3.0-win-x64.zip" ] || { echo "Unexpected asset name" >&2; exit 1; }
+          [ "$RS_ASSET_NAME" = "ReportScout-0.3.3-win-x64.zip" ] || { echo "Unexpected asset name" >&2; exit 1; }
           [ -f "$GITHUB_WORKSPACE/rs-input/$RS_ASSET_NAME" ] || { echo "Prepared ZIP is missing" >&2; exit 1; }
           echo "RS_LOCAL_ZIP=$(cygpath -w "$GITHUB_WORKSPACE/rs-input/$RS_ASSET_NAME")" >> "$GITHUB_ENV"
 
@@ -124,7 +124,7 @@ jobs:
           RS_RELEASE_TAG: ${{ inputs.release_tag }}
           RS_ASSET_NAME: ${{ inputs.asset_name }}
           RS_SHA256: ${{ inputs.sha256 }}
-          RS_EXPECTED_VERSION: "0.3.0"
+          RS_EXPECTED_VERSION: "0.3.3"
         run: node release-checks/windows-smoke.mjs
 
   # Runs only when the Windows job succeeded and publish was ticked. Its separate write token is used only for publication. It downloads nothing but
@@ -146,14 +146,14 @@ jobs:
           RS_RELEASE_TAG: ${{ inputs.release_tag }}
           RS_ASSET_NAME: ${{ inputs.asset_name }}
           RS_SHA256: ${{ inputs.sha256 }}
-          RS_PUBLIC_TAG: v0.3.0
+          RS_PUBLIC_TAG: v0.3.3
         run: |
           set -euo pipefail
           [ "$RS_REPOSITORY" = "techczech/report-scout" ] || { echo "Wrong repository" >&2; exit 1; }
-          [ "$RS_RELEASE_TAG" = "reportscout-windows-0.3.0-verification" ] || { echo "Unexpected draft tag" >&2; exit 1; }
-          [ "$RS_ASSET_NAME" = "ReportScout-0.3.0-win-x64.zip" ] || { echo "Unexpected asset name" >&2; exit 1; }
+          [ "$RS_RELEASE_TAG" = "reportscout-windows-0.3.3-verification" ] || { echo "Unexpected draft tag" >&2; exit 1; }
+          [ "$RS_ASSET_NAME" = "ReportScout-0.3.3-win-x64.zip" ] || { echo "Unexpected asset name" >&2; exit 1; }
           [[ "$RS_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "SHA-256 must be 64 lowercase hex characters" >&2; exit 1; }
-          SUMS_NAME="ReportScout-0.3.0-win-x64-SHA256SUMS.txt"
+          SUMS_NAME="ReportScout-0.3.3-win-x64-SHA256SUMS.txt"
 
           # Drafts are not found by tag, so the draft is located through the release list, exactly as the Windows check does.
           draft_ids=$(gh api --paginate "repos/$RS_REPOSITORY/releases?per_page=100" \

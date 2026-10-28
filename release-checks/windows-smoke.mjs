@@ -7,7 +7,7 @@
 //   RS_RELEASE_TAG      tag of the DRAFT release
 //   RS_ASSET_NAME       exact asset file name (a .zip)
 //   RS_SHA256           expected SHA-256 of the asset (64 hex characters)
-//   RS_EXPECTED_VERSION optional, default 0.3.0
+//   RS_EXPECTED_VERSION optional, default 0.3.3
 //   RS_LOCAL_ZIP        optional: use this ZIP instead of the API (for a build check before publishing); RS_SHA256 still applies
 //   RS_REPORT_FILE      optional: also write the JSON report here
 // `node windows-smoke.mjs --self-test` checks the parsers on any OS without a release.
@@ -126,12 +126,12 @@ function run(label, exe, args, {env, cwd, timeoutMs = 120000, show = args} = {})
 function inputs() {
   const env = process.env, get = k => (env[k] || '').trim();
   const out = {repo: get('GITHUB_REPOSITORY'), tag: get('RS_RELEASE_TAG'), asset: get('RS_ASSET_NAME'), sha256: get('RS_SHA256').toLowerCase(),
-    version: get('RS_EXPECTED_VERSION') || '0.3.0', localZip: get('RS_LOCAL_ZIP')};
+    version: get('RS_EXPECTED_VERSION') || '0.3.3', localZip: get('RS_LOCAL_ZIP')};
   if (!out.localZip) assert.match(out.repo, /^[\w.-]+\/[\w.-]+$/, 'GITHUB_REPOSITORY must be owner/name');
   assert.match(out.tag, /^[\w.\/-]{1,100}$/, 'RS_RELEASE_TAG has unexpected characters');
   assert.match(out.asset, /^[\w.-]{1,150}\.zip$/, 'RS_ASSET_NAME must be a plain .zip file name');
   assert.match(out.sha256, /^[0-9a-f]{64}$/, 'RS_SHA256 must be 64 hex characters');
-  assert.match(out.version, /^\d+\.\d+\.\d+$/, 'RS_EXPECTED_VERSION must look like 0.3.0');
+  assert.match(out.version, /^\d+\.\d+\.\d+$/, 'RS_EXPECTED_VERSION must look like 0.3.3');
   return out;
 }
 
@@ -443,12 +443,31 @@ async function main() {
 
     const facts = await ev('return {version: electron.app.getVersion(), packaged: electron.app.isPackaged, userData: electron.app.getPath("userData"), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node, platform: process.platform, arch: process.arch, name: electron.app.getName()};');
     report.versions.runningApp = facts;
-    assertion('the running app is the packaged 0.3.0 Windows x64 build using the explicit data folder', facts.packaged === true && facts.version === want.version && facts.platform === 'win32' && facts.arch === 'x64' && comparable(facts.userData) === comparable(dirs.data), facts);
+    assertion('the running app is the packaged 0.3.3 Windows x64 build using the explicit data folder', facts.packaged === true && facts.version === want.version && facts.platform === 'win32' && facts.arch === 'x64' && comparable(facts.userData) === comparable(dirs.data), facts);
 
     await until(() => ev(`const w = ${mainWin}; return !!w && !w.webContents.isLoading();`).catch(() => false), 'the main window to load index.html', 60000);
-    const shown = await until(async () => { const r = await inMain('window.reportScout.call("reports").then(x => ({total: x.total, reports: x.reports.map(r => ({title: r.title, starred: !!r.starred, path: r.path}))}))').catch(() => null); return r?.total >= 1 && r; }, 'the captured report to be listed', 60000);
+    const shown = await until(async () => { const r = await inMain('window.reportScout.call("reports").then(x => ({total: x.total, reports: x.reports.map(r => ({id: r.id, title: r.title, starred: !!r.starred, path: r.path}))}))').catch(() => null); return r?.total >= 1 && r; }, 'the captured report to be listed', 60000);
     const ui = await inMain('({root: document.querySelector("#root")?.childElementCount || 0, rows: document.querySelectorAll(".report-row").length, text: document.body.innerText.slice(0, 400)})');
     assertion('the renderer loaded and lists the report captured from the command line, still starred', ui.root > 0 && shown.reports.some(r => r.title === CAPTURE.title && r.starred === true) && !/could not be read/.test(ui.text), {rows: ui.rows, reports: shown.reports.map(r => ({title: r.title, starred: r.starred}))});
+
+    // 0.3.3 regression coverage: real key events in the hidden Windows renderer; synthetic inbox only.
+    const capturedBytesBeforeArchive = fs.readFileSync(captured);
+    const marksBeforeTyping = fs.readFileSync(path.join(inbox, 'report-marks.json'), 'utf8');
+    await inMain('(() => { const i = document.querySelector("input[type=search]"); i.focus(); return true; })()');
+    await ev(`const w = ${mainWin}; for (const ch of 'stclg ') { w.webContents.sendInputEvent({type:'keyDown',keyCode:ch}); w.webContents.sendInputEvent({type:'char',keyCode:ch}); w.webContents.sendInputEvent({type:'keyUp',keyCode:ch}); await new Promise(r => setTimeout(r,30)); } return true;`);
+    const typed = await inMain('({q:document.querySelector("input[type=search]").value, focused:document.activeElement === document.querySelector("input[type=search]"), dialog:!!document.querySelector("[role=dialog]"), gallery:document.querySelector(".app").classList.contains("gallery")})');
+    assertion('Windows key events for single-key shortcuts stay in the search field without changing marks', typed.q === 'stclg ' && typed.focused && !typed.dialog && !typed.gallery && fs.readFileSync(path.join(inbox, 'report-marks.json'), 'utf8') === marksBeforeTyping, typed);
+    await inMain('(() => { const i = document.querySelector("input[type=search]"); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(i, ""); i.dispatchEvent(new Event("input",{bubbles:true})); i.blur(); return true; })()');
+    await until(() => inMain('!!document.querySelector(".report-row")'), 'reports after clearing the search');
+    const captureRow = shown.reports.find(r => r.title === CAPTURE.title);
+    // The trusted renderer bridge is the same route used by Archive. No workflow token reaches it.
+    const archived = await inMain(`window.reportScout.call("mark", ${JSON.stringify(captureRow.id)}, "archive", true)`);
+    const archiveBrowse = await inMain('window.reportScout.call("search", "", {archive:"only"}).then(x=>x.map(r=>r.title))');
+    const normalBrowse = await inMain('window.reportScout.call("search", "", {}).then(x=>x.map(r=>r.title))');
+    assertion('Archive hides the synthetic report from ordinary search and retains its star in the Archive', archived.archived === true && archived.starred === true && archiveBrowse.includes(CAPTURE.title) && !normalBrowse.includes(CAPTURE.title), {archived:archived.archived, starred:archived.starred, archiveBrowse, normalBrowse});
+    const restored = await inMain(`window.reportScout.call("mark", ${JSON.stringify(captureRow.id)}, "archive", false)`);
+    const restoredBrowse = await inMain('window.reportScout.call("search", "", {}).then(x=>x.map(r=>r.title))');
+    assertion('Restore returns the synthetic report with its star and leaves its HTML bytes unchanged', !restored.archived && restored.starred === true && restoredBrowse.includes(CAPTURE.title) && fs.readFileSync(captured).equals(capturedBytesBeforeArchive), {restored:!restored.archived, starred:restored.starred});
 
     // Settings window, driven through its own page: the Report folders page and the settings bridge, as a person would
     await ev('globalThis.__settingsHost.openSettingsWindow("folders"); return true;');
@@ -539,11 +558,11 @@ function selfTest() {
   assert.throws(() => readPE(Buffer.alloc(8192)), /no MZ/);
   const tmp = fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()), 'rs-selftest-'));
   try {
-    const body = Buffer.from('{"name":"x","version":"0.3.0"}');
+    const body = Buffer.from('{"name":"x","version":"0.3.3"}');
     const index = Buffer.from(JSON.stringify({files: {'package.json': {size: body.length, offset: '0'}, src: {files: {'a.js': {size: 1, offset: String(body.length)}}}}}));
     const head = Buffer.alloc(16); const pad = (index.length + 3) & ~3; head.writeUInt32LE(4, 0); head.writeUInt32LE(8 + pad, 4); head.writeUInt32LE(4 + pad, 8); head.writeUInt32LE(index.length, 12);
     fs.writeFileSync(path.join(tmp, 'app.asar'), Buffer.concat([head, index, Buffer.alloc(pad - index.length), body, Buffer.from('z')]));
-    assert.equal(JSON.parse(readAsarFile(path.join(tmp, 'app.asar'), 'package.json')).version, '0.3.0');
+    assert.equal(JSON.parse(readAsarFile(path.join(tmp, 'app.asar'), 'package.json')).version, '0.3.3');
     assert.equal(readAsarFile(path.join(tmp, 'app.asar'), 'src/a.js').toString(), 'z');
     assert.throws(() => readAsarFile(path.join(tmp, 'app.asar'), 'src'), /not packed/);
   } finally { fs.rmSync(tmp, {recursive: true, force: true}); }

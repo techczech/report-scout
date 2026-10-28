@@ -1,4 +1,4 @@
-A local HTML report library for Mac and Windows · Mac version 0.3.2, Windows version 0.3.0
+A local HTML report library for Mac and Windows · Mac version 0.3.3, Windows version 0.3.0
 
 ![ReportScout icon: report sheets under a magnifying glass.](https://techczech.github.io/report-scout/assets/reportscout-icon-512.png)
 
@@ -9,7 +9,7 @@ Read them in one place.
 
 Browse and search the HTML reports and visualisations your agents create. Keep the files in their project folders, with a gallery and reader to find them again.
 
-[Download for Mac](https://github.com/techczech/report-scout/releases/download/v0.3.2/ReportScout-0.3.2-mac-arm64.zip)
+[Download for Mac](https://github.com/techczech/report-scout/releases/download/v0.3.3/ReportScout-0.3.3-mac-arm64.zip)
 
 [Download for Windows](https://github.com/techczech/report-scout/releases/download/v0.3.0/ReportScout-0.3.0-win-x64.zip)
 
@@ -88,7 +88,7 @@ Your catalogue, search index, stars, categories, topic choices and report links 
 The Mac download supports macOS 12 or later on Apple silicon (arm64). The Windows download supports Windows 10 or later on x64 computers. Mac download Developer ID signed and notarised. Windows download unsigned.
 
 ### What happens to an archived report?
-Nothing happens to the file. ReportScout saves an Archive mark with your other marks. Version 0.3.0 does not know that mark and drops it when it saves any mark change, so if several Macs share one inbox, update all of them to 0.3.2 before archiving reports.
+Nothing happens to the file. ReportScout saves an Archive mark with your other marks. Version 0.3.0 does not know that mark and drops it when it saves any mark change, so if several Macs share one inbox, update all of them to 0.3.2 or later before archiving reports.
 
 ### Does it move my project reports?
 Reports found in your chosen project folders stay there. Registered reports and reports captured into the app’s inbox are also included in the catalogue.
@@ -97,10 +97,10 @@ Reports found in your chosen project folders stay there. Registered reports and 
 No. ReportScout reads HTML reports. It does not index linked Markdown files, PDFs or the contents of web pages.
 
 ## Bring your HTML reports together
-Mac 0.3.2, Windows 0.3.0 · macOS 12 or later on Apple silicon · Windows 10 or later (x64)
+Mac 0.3.3, Windows 0.3.0 · macOS 12 or later on Apple silicon · Windows 10 or later (x64)
 
-[Download for Mac](https://github.com/techczech/report-scout/releases/download/v0.3.2/ReportScout-0.3.2-mac-arm64.zip)
+[Download for Mac](https://github.com/techczech/report-scout/releases/download/v0.3.3/ReportScout-0.3.3-mac-arm64.zip)
 
 [Download for Windows](https://github.com/techczech/report-scout/releases/download/v0.3.0/ReportScout-0.3.0-win-x64.zip)
 
-[Release notes](https://github.com/techczech/report-scout/releases/tag/v0.3.2)
+[Release notes](https://github.com/techczech/report-scout/releases/tag/v0.3.3)

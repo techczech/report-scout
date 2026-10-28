@@ -7,7 +7,7 @@
 //   RS_RELEASE_TAG      tag of the DRAFT release
 //   RS_ASSET_NAME       exact asset file name (a .zip)
 //   RS_SHA256           expected SHA-256 of the asset (64 hex characters)
-//   RS_EXPECTED_VERSION optional, default 0.3.3
+//   RS_EXPECTED_VERSION optional, default 0.3.4
 //   RS_LOCAL_ZIP        optional: use this ZIP instead of the API (for a build check before publishing); RS_SHA256 still applies
 //   RS_REPORT_FILE      optional: also write the JSON report here
 // `node windows-smoke.mjs --self-test` checks the parsers on any OS without a release.
@@ -126,12 +126,12 @@ function run(label, exe, args, {env, cwd, timeoutMs = 120000, show = args} = {})
 function inputs() {
   const env = process.env, get = k => (env[k] || '').trim();
   const out = {repo: get('GITHUB_REPOSITORY'), tag: get('RS_RELEASE_TAG'), asset: get('RS_ASSET_NAME'), sha256: get('RS_SHA256').toLowerCase(),
-    version: get('RS_EXPECTED_VERSION') || '0.3.3', localZip: get('RS_LOCAL_ZIP')};
+    version: get('RS_EXPECTED_VERSION') || '0.3.4', localZip: get('RS_LOCAL_ZIP')};
   if (!out.localZip) assert.match(out.repo, /^[\w.-]+\/[\w.-]+$/, 'GITHUB_REPOSITORY must be owner/name');
   assert.match(out.tag, /^[\w.\/-]{1,100}$/, 'RS_RELEASE_TAG has unexpected characters');
   assert.match(out.asset, /^[\w.-]{1,150}\.zip$/, 'RS_ASSET_NAME must be a plain .zip file name');
   assert.match(out.sha256, /^[0-9a-f]{64}$/, 'RS_SHA256 must be 64 hex characters');
-  assert.match(out.version, /^\d+\.\d+\.\d+$/, 'RS_EXPECTED_VERSION must look like 0.3.3');
+  assert.match(out.version, /^\d+\.\d+\.\d+$/, 'RS_EXPECTED_VERSION must look like 0.3.4');
   return out;
 }
 
@@ -413,6 +413,18 @@ async function main() {
   const marks = JSON.parse(fs.readFileSync(path.join(inbox, 'report-marks.json'), 'utf8'));
   assertion('the star is stored in the data folder inbox', marks.reports?.some(r => r.starred === true), {entries: marks.reports?.length});
 
+  // Extra synthetic inbox reports let the native renderer prove exact batch targets.
+  const batchFiles = [captured];
+  for (const [n, title] of [[2, 'Batch second report'], [3, 'Batch untouched report']]) {
+    const source = path.join(dirs.source, `batch-${n}.html`);
+    fs.writeFileSync(source, html(title, `Synthetic batch body ${n}`));
+    const added = await c(`capture batch fixture ${n}`, ['add', source, '--title', title, '--by', 'windows-smoke']);
+    const target = added.stdout.trim().split('\t')[0];
+    assertion(`batch fixture ${n} captured`, added.exit === 0 && fs.existsSync(target));
+    batchFiles.push(target);
+  }
+  const batchBytes = batchFiles.map(f => fs.readFileSync(f));
+
   // Diagnostic only: how each step of a settings write ends on this machine, from the app's own runtime, in a fresh scratch folder
   await settingsWriteProbe('before the window', exe, asar, cliEnv, dirs.work, dirs.tools, ['full', path.join(scratch, 'Nastavení sonda č. 1'), '']);
 
@@ -443,14 +455,14 @@ async function main() {
 
     const facts = await ev('return {version: electron.app.getVersion(), packaged: electron.app.isPackaged, userData: electron.app.getPath("userData"), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node, platform: process.platform, arch: process.arch, name: electron.app.getName()};');
     report.versions.runningApp = facts;
-    assertion('the running app is the packaged 0.3.3 Windows x64 build using the explicit data folder', facts.packaged === true && facts.version === want.version && facts.platform === 'win32' && facts.arch === 'x64' && comparable(facts.userData) === comparable(dirs.data), facts);
+    assertion('the running app is the packaged 0.3.4 Windows x64 build using the explicit data folder', facts.packaged === true && facts.version === want.version && facts.platform === 'win32' && facts.arch === 'x64' && comparable(facts.userData) === comparable(dirs.data), facts);
 
     await until(() => ev(`const w = ${mainWin}; return !!w && !w.webContents.isLoading();`).catch(() => false), 'the main window to load index.html', 60000);
     const shown = await until(async () => { const r = await inMain('window.reportScout.call("reports").then(x => ({total: x.total, reports: x.reports.map(r => ({id: r.id, title: r.title, starred: !!r.starred, path: r.path}))}))').catch(() => null); return r?.total >= 1 && r; }, 'the captured report to be listed', 60000);
     const ui = await inMain('({root: document.querySelector("#root")?.childElementCount || 0, rows: document.querySelectorAll(".report-row").length, text: document.body.innerText.slice(0, 400)})');
     assertion('the renderer loaded and lists the report captured from the command line, still starred', ui.root > 0 && shown.reports.some(r => r.title === CAPTURE.title && r.starred === true) && !/could not be read/.test(ui.text), {rows: ui.rows, reports: shown.reports.map(r => ({title: r.title, starred: r.starred}))});
 
-    // 0.3.3 regression coverage: real key events in the hidden Windows renderer; synthetic inbox only.
+    // 0.3.4 regression coverage: real key events in the hidden Windows renderer; synthetic inbox only.
     const capturedBytesBeforeArchive = fs.readFileSync(captured);
     const marksBeforeTyping = fs.readFileSync(path.join(inbox, 'report-marks.json'), 'utf8');
     await inMain('(() => { const i = document.querySelector("input[type=search]"); i.focus(); return true; })()');
@@ -468,6 +480,38 @@ async function main() {
     const restored = await inMain(`window.reportScout.call("mark", ${JSON.stringify(captureRow.id)}, "archive", false)`);
     const restoredBrowse = await inMain('window.reportScout.call("search", "", {}).then(x=>x.map(r=>r.title))');
     assertion('Restore returns the synthetic report with its star and leaves its HTML bytes unchanged', !restored.archived && restored.starred === true && restoredBrowse.includes(CAPTURE.title) && fs.readFileSync(captured).equals(capturedBytesBeforeArchive), {restored:!restored.archived, starred:restored.starred});
+
+    // Native 0.3.4 batch UI: the existing inspector drives only synthetic renderer controls.
+    const clickButton = text => inMain(`(() => { const b = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(text)}); if (!b || b.disabled) throw new Error('missing enabled button: ' + ${JSON.stringify(text)}); b.click(); return true; })()`);
+    const tickTitle = title => inMain(`(() => { const b = [...document.querySelectorAll('input.pick')].find(b => b.getAttribute('aria-label') === ${JSON.stringify('Select ' + title)}); if (!b) throw new Error('missing checkbox'); b.click(); return true; })()`);
+    const batchState = () => inMain(`({titles:[...document.querySelectorAll('.report-row b,.gcard .gtitle')].map(e=>e.textContent), checked:[...document.querySelectorAll('input.pick:checked')].map(e=>e.getAttribute('aria-label')), count:document.querySelector('.batch-count')?.textContent || '', focused:document.activeElement?.type})`);
+    const archiveToggle = () => inMain(`document.querySelector('section[aria-label="Archive"] button').click(); true`);
+    for (const layout of ['List', 'Gallery']) {
+      await clickButton(layout);
+      await until(async () => (await batchState()).titles.length === 3, `${layout} has all three batch fixtures`);
+      await tickTitle(CAPTURE.title); await tickTitle('Batch second report');
+      const selected = await batchState();
+      assertion(`${layout}: two checkboxes select exactly two reports with an accessible count`, selected.checked.length === 2 && selected.count === '2 reports selected', selected);
+      // The same selection survives switching layouts, then returns to its original view.
+      await clickButton(layout === 'List' ? 'Gallery' : 'List');
+      await until(async () => (await batchState()).checked.length === 2, 'selection across layouts');
+      await clickButton(layout);
+      await clickButton('Archive selected');
+      await until(async () => { const x = await batchState(); return x.titles.length === 1 && x.titles[0] === 'Batch untouched report'; }, 'batch leaves only the unticked fixture');
+      const marked = JSON.parse(fs.readFileSync(path.join(inbox, 'report-marks.json'), 'utf8'));
+      const archivedPaths = marked.reports.filter(r => r.archived).map(r => comparable(r.path)).sort();
+      assertion(`${layout}: batch Archive changes exactly the two selected reports and preserves the star`, JSON.stringify(archivedPaths) === JSON.stringify(batchFiles.slice(0,2).map(comparable).sort()) && marked.reports.find(r => comparable(r.path) === comparable(captured))?.starred === true, {archivedPaths});
+      await archiveToggle();
+      await until(async () => (await batchState()).titles.length === 2, 'Archive shows the batch');
+      await tickTitle(CAPTURE.title); await tickTitle('Batch second report');
+      await clickButton('Restore selected');
+      await until(async () => (await batchState()).titles.length === 0, 'batch restored out of Archive');
+      await archiveToggle();
+      await until(async () => (await batchState()).titles.length === 3, 'all restored in ordinary view');
+      const finalMarks = JSON.parse(fs.readFileSync(path.join(inbox, 'report-marks.json'), 'utf8'));
+      assertion(`${layout}: batch Restore returns both reports and preserves every fixture byte`, !finalMarks.reports.some(r => r.archived) && batchFiles.every((f,i) => fs.readFileSync(f).equals(batchBytes[i])));
+    }
+    await clickButton('List');
 
     // Settings window, driven through its own page: the Report folders page and the settings bridge, as a person would
     await ev('globalThis.__settingsHost.openSettingsWindow("folders"); return true;');
@@ -558,11 +602,11 @@ function selfTest() {
   assert.throws(() => readPE(Buffer.alloc(8192)), /no MZ/);
   const tmp = fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()), 'rs-selftest-'));
   try {
-    const body = Buffer.from('{"name":"x","version":"0.3.3"}');
+    const body = Buffer.from('{"name":"x","version":"0.3.4"}');
     const index = Buffer.from(JSON.stringify({files: {'package.json': {size: body.length, offset: '0'}, src: {files: {'a.js': {size: 1, offset: String(body.length)}}}}}));
     const head = Buffer.alloc(16); const pad = (index.length + 3) & ~3; head.writeUInt32LE(4, 0); head.writeUInt32LE(8 + pad, 4); head.writeUInt32LE(4 + pad, 8); head.writeUInt32LE(index.length, 12);
     fs.writeFileSync(path.join(tmp, 'app.asar'), Buffer.concat([head, index, Buffer.alloc(pad - index.length), body, Buffer.from('z')]));
-    assert.equal(JSON.parse(readAsarFile(path.join(tmp, 'app.asar'), 'package.json')).version, '0.3.3');
+    assert.equal(JSON.parse(readAsarFile(path.join(tmp, 'app.asar'), 'package.json')).version, '0.3.4');
     assert.equal(readAsarFile(path.join(tmp, 'app.asar'), 'src/a.js').toString(), 'z');
     assert.throws(() => readAsarFile(path.join(tmp, 'app.asar'), 'src'), /not packed/);
   } finally { fs.rmSync(tmp, {recursive: true, force: true}); }
